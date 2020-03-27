@@ -448,9 +448,16 @@ void Tracking::Track()
             }
             mlpTemporalPoints.clear();
 
-            // Check if we need to insert a new keyframe
+            // DEFAULT: Check if we need to insert a new keyframe
+
+
+
             if(NeedNewKeyFrame())
-                CreateNewKeyFrame();
+               CreateNewKeyFrame();
+
+            // TEST: ALWAYS GENERATE A KEYFRAME:
+        //    CreateNewKeyFrame();
+
 
             // We allow points with high innovation (considererd outliers by the Huber Function)
             // pass to the new keyframe, so that bundle adjustment will finally decide

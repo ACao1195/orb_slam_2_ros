@@ -35,8 +35,10 @@ DepthMapFactor: 1000.0
 # ORB Parameters
 #--------------------------------------------------------------------------------------------
 
+# THESE CAN BE CHANGED WITHOUT RECOMPILING
+
 # ORB Extractor: Number of features per image
-ORBextractor.nFeatures: 10000 # Default 1000
+ORBextractor.nFeatures: 1000 # Default 1000
 
 # ORB Extractor: Scale factor between levels in the scale pyramid
 ORBextractor.scaleFactor: 1.2 # Default 1.2
