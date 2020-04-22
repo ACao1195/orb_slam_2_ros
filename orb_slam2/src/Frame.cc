@@ -36,6 +36,8 @@ Frame::Frame()
 {}
 
 //Copy Constructor
+
+// The constructor initialises the object of Class Frame with certain parameters
 Frame::Frame(const Frame &frame)
     :mpORBvocabulary(frame.mpORBvocabulary), mpORBextractorLeft(frame.mpORBextractorLeft), mpORBextractorRight(frame.mpORBextractorRight),
      mTimeStamp(frame.mTimeStamp), mK(frame.mK.clone()), mDistCoef(frame.mDistCoef.clone()),
@@ -49,6 +51,10 @@ Frame::Frame(const Frame &frame)
      mvScaleFactors(frame.mvScaleFactors), mvInvScaleFactors(frame.mvInvScaleFactors),
      mvLevelSigma2(frame.mvLevelSigma2), mvInvLevelSigma2(frame.mvInvLevelSigma2)
 {
+    // Initialises a 48x64 Grid 
+    // From frame.h:
+        // Keypoints are assigned to cells in a grid to reduce matching complexity when projecting MapPoints.
+
     for(int i=0;i<FRAME_GRID_COLS;i++)
         for(int j=0; j<FRAME_GRID_ROWS; j++)
             mGrid[i][j]=frame.mGrid[i][j];
@@ -116,6 +122,10 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     AssignFeaturesToGrid();
 }
 
+/*
+// This is the Frame function used for our RGBD processing
+*/
+
 Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
     :mpORBvocabulary(voc),mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
      mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
@@ -132,7 +142,7 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeSt
     mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
     mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
 
-    // ORB extraction
+    // ORB feature extraction
     ExtractORB(0,imGray);
 
     N = mvKeys.size();
@@ -244,6 +254,7 @@ void Frame::AssignFeaturesToGrid()
     }
 }
 
+// Extract ORB Features - go to 
 void Frame::ExtractORB(int flag, const cv::Mat &im)
 {
     if(flag==0)

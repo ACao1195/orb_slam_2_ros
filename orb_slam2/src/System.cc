@@ -219,6 +219,7 @@ void System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double 
     }
     }
 
+    // Processes current frame - go to Tracking.cc
     cv::Mat Tcw = mpTracker->GrabImageRGBD(im,depthmap,timestamp);
 
     unique_lock<mutex> lock2(mMutexState);

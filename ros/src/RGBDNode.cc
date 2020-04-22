@@ -65,6 +65,7 @@ void RGBDNode::ImageCallback (const sensor_msgs::ImageConstPtr& msgRGB, const se
 
   current_frame_time_ = msgRGB->header.stamp;
 
+  // Processes current frame - go to orb_slam2/src/System.cc
   orb_slam_->TrackRGBD(cv_ptrRGB->image,cv_ptrD->image,cv_ptrRGB->header.stamp.toSec());
 
   Update ();
