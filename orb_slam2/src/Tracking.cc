@@ -387,6 +387,7 @@ void Tracking::Track()
                 }
             }
         }
+        // End check if conditional for if only tracking or not
 
         mCurrentFrame.mpReferenceKF = mpReferenceKF;
 
