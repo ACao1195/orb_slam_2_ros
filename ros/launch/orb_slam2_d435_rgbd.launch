@@ -1,4 +1,5 @@
 <launch>
+  <arg name="debugFlag" default="false"/>
   <node name="orb_slam2_rgbd" pkg="orb_slam2_ros"
       type="orb_slam2_ros_rgbd" output="screen">
 
@@ -19,5 +20,8 @@
        <param name="pointcloud_frame_id" type="string" value="map" />
        <param name="camera_frame_id" type="string" value="camera_link" />
        <param name="min_num_kf_in_map" type="int" value="5" />
-  </node>
+
+       <!-- Debug flag to enable debug logging -->
+       <param name="debugFlag" type="bool" value="$(arg debugFlag)"/>
+   </node>
 </launch>

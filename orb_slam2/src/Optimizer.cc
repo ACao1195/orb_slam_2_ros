@@ -18,6 +18,9 @@
 * along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "ORBSLAM_Thesis.h"
+#include <ros/ros.h>
+
 #include "Optimizer.h"
 
 #include "Thirdparty/g2o/g2o/core/block_solver.h"
@@ -28,15 +31,20 @@
 #include "Thirdparty/g2o/g2o/solvers/linear_solver_dense.h"
 #include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"
 
-#include<Eigen/StdVector>
+#include <Eigen/StdVector>
 
 #include "Converter.h"
 
-#include<mutex>
+#include <mutex>
 
+using namespace g2o;
 namespace ORB_SLAM2
 {
 
+    // Global variables to store covariance data
+    OptimizableGraph::VertexContainer testVertexContainer;
+    SparseBlockMatrix<MatrixXd> testOutputMatrix;
+    
 
 void Optimizer::GlobalBundleAdjustemnt(Map* pMap, int nIterations, bool* pbStopFlag, const unsigned long nLoopKF, const bool bRobust)
 {
@@ -183,8 +191,10 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
         }
     }
 
-    // Optimize!
+    // Optimize! For bundle adjustment
     optimizer.initializeOptimization();
+
+    ROS_DEBUG_STREAM("Running general bundle adjustment.");
     optimizer.optimize(nIterations);
 
     // Recover optimized data
@@ -376,6 +386,9 @@ int Optimizer::PoseOptimization(Frame *pFrame)
 
         vSE3->setEstimate(Converter::toSE3Quat(pFrame->mTcw));
         optimizer.initializeOptimization(0);
+        // Pose optimisation
+
+//        ROS_DEBUG_STREAM("Running pose optimisation.");
         optimizer.optimize(its[it]);
 
         nBad=0;
@@ -628,6 +641,13 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
 
                     e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id)));
                     e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKFi->mnId)));
+
+
+
+
+
+
+
                     e->setMeasurement(obs);
                     const float &invSigma2 = pKFi->mvInvLevelSigma2[kpUn.octave];
                     Eigen::Matrix3d Info = Eigen::Matrix3d::Identity()*invSigma2;
@@ -657,6 +677,8 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
             return;
 
     optimizer.initializeOptimization();
+ //   ROS_DEBUG_STREAM("Running local bundle adjustment.");
+    // Local bundle adjustment optimiser
     optimizer.optimize(5);
 
     bool bDoMore= true;
@@ -704,8 +726,42 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
     // Optimize again without the outliers
 
     optimizer.initializeOptimization(0);
+
+    // DEBUG: Set verbosity
+//    optimizer.setVerbose(true);
+
+
+//    ROS_DEBUG_STREAM("Running local bundle adjustment without outliers.");
+    // Local bundle adjustment optimiser #2
     optimizer.optimize(10);
 
+    // Extract marginals from optimized graph - but we want global graph
+
+
+    // Get all vertices and store in local vertex container (CURRENTLY NOT WORKING)
+    g2o::OptimizableGraph::VertexContainer localTestVertexContainer;
+    g2o::SparseBlockMatrix<MatrixXd> localTestOutputMatrix;
+
+    for (g2o::OptimizableGraph::VertexIDMap::const_iterator it = optimizer.vertices().begin(); it != optimizer.vertices().end(); ++it) {
+//        ROS_DEBUG_STREAM("it = " << it->second);
+        g2o::OptimizableGraph::Vertex* v = static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
+ //       ROS_DEBUG_STREAM("v = " << v);
+        localTestVertexContainer.push_back(v);
+    }
+
+
+    // Will only print value if computeMarginals successfully runs (i.e. input vertices are valid)
+    bool marginalSuccess = optimizer.computeMarginals(localTestOutputMatrix,optimizer.vertex(0));
+
+    if(marginalSuccess){
+        ROS_INFO_STREAM("Covariance of local bundle adjustment:\n" << localTestOutputMatrix << "\n");
+ //   cout << testOutputMatrix.block(0,0) << endl;
+    }
+    else {
+        ROS_DEBUG_STREAM("computeMarginals Success: " << marginalSuccess);
+    }
+
+    
     }
 
     vector<pair<KeyFrame*,MapPoint*> > vToErase;
@@ -982,7 +1038,10 @@ void Optimizer::OptimizeEssentialGraph(Map* pMap, KeyFrame* pLoopKF, KeyFrame* p
         }
     }
 
-    // Optimize!
+    // Optimize! For the essential graph
+ //   if(debugTextFlag){
+        ROS_DEBUG_STREAM("Optimising essential graph - 20 iterations.");
+ //   }
     optimizer.initializeOptimization();
     optimizer.optimize(20);
 
@@ -1177,7 +1236,8 @@ int Optimizer::OptimizeSim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint *> &
         vnIndexEdge.push_back(i);
     }
 
-    // Optimize!
+    // Optimize! For Sim3
+    ROS_DEBUG_STREAM("Optimising Sim3.");
     optimizer.initializeOptimization();
     optimizer.optimize(5);
 
@@ -1214,6 +1274,7 @@ int Optimizer::OptimizeSim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint *> &
     // Optimize again only with inliers
 
     optimizer.initializeOptimization();
+    // Optimise for Sim3 #2
     optimizer.optimize(nMoreIterations);
 
     int nIn = 0;

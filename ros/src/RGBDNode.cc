@@ -1,15 +1,30 @@
 #include "RGBDNode.h"
+#include <ros/console.h>
 
 int main(int argc, char **argv)
 {
+    bool debugFlag;
+
     ros::init(argc, argv, "RGBD");
     ros::start();
 
-    if(argc > 1) {
-        ROS_WARN ("Arguments supplied via command line are neglected.");
-    }
+    // if(argc > 1) {
+    //     ROS_WARN ("Arguments supplied via command line are neglected.");
+    // }
 
     ros::NodeHandle node_handle;
+
+    ROS_INFO_STREAM("Checking debug flag...");
+    // Enable debug logging if debugFlag received as true
+    if(node_handle.getParam("/orb_slam2_rgbd/debugFlag", debugFlag)) {
+      ROS_INFO_STREAM("Got debug flag.");
+      if(debugFlag){
+        ROS_INFO_STREAM("Debug flag set to true.");
+        if(ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug) ) {
+          ros::console::notifyLoggerLevelsChanged();
+        }
+      }
+    }
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     image_transport::ImageTransport image_transport (node_handle);

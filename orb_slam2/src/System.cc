@@ -18,7 +18,7 @@
 * along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
+#include "ORBSLAM_Thesis.h"
 
 #include "System.h"
 #include "Converter.h"
@@ -124,6 +124,8 @@ System::System(const string strVocFile, const string strSettingsFile, const eSen
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
 
     currently_localizing_only_ = false;
+
+    ROS_DEBUG_STREAM("Reached end of System::System");
 }
 
 void System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timestamp)

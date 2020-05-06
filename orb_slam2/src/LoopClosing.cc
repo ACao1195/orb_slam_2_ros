@@ -18,6 +18,8 @@
 * along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "ORBSLAM_Thesis.h"
+
 #include "LoopClosing.h"
 
 #include "Sim3Solver.h"
@@ -56,20 +58,22 @@ void LoopClosing::SetLocalMapper(LocalMapping *pLocalMapper)
 
 void LoopClosing::Run()
 {
+    ROS_DEBUG_STREAM("Checking for loop closures...");
+
     mbFinished =false;
 
     while(1)
     {
         // Check if there are keyframes in the queue
         if(CheckNewKeyFrames())
-        {
+        { //ROS_DEBUG_STREAM("Loop Closure: Found new keyframe, check for loop closure...");
             // Detect loop candidates and check covisibility consistency
             if(DetectLoop())
-            {
+            { ROS_DEBUG_STREAM("Loop Closure: Found loop with covisibility consistency, check for Sim3...");
                // Compute similarity transformation [sR|t]
                // In the stereo/RGBD case s=1
                if(ComputeSim3())
-               {
+               {    ROS_DEBUG_STREAM("Loop Closure: Computed Sim3. Performing loop closure...");
                    // Perform loop fusion and pose graph optimization
                    CorrectLoop();
                }
@@ -249,6 +253,7 @@ bool LoopClosing::ComputeSim3()
 
     int nCandidates=0; //candidates with enough matches
 
+    ROS_DEBUG_STREAM("nInitialCandidates = " << nInitialCandidates);
     for(int i=0; i<nInitialCandidates; i++)
     {
         KeyFrame* pKF = mvpEnoughConsistentCandidates[i];
@@ -258,24 +263,29 @@ bool LoopClosing::ComputeSim3()
 
         if(pKF->isBad())
         {
+            ROS_DEBUG_STREAM("Keyframe " << i << " is bad.");
             vbDiscarded[i] = true;
             continue;
         }
 
         int nmatches = matcher.SearchByBoW(mpCurrentKF,pKF,vvpMapPointMatches[i]);
 
-        if(nmatches<20)
+        if(nmatches<6) // Default 20
         {
+            ROS_DEBUG_STREAM("Not enough BoW matches. Need 20, have: " << nmatches);
             vbDiscarded[i] = true;
             continue;
         }
         else
         {
             Sim3Solver* pSolver = new Sim3Solver(mpCurrentKF,pKF,vvpMapPointMatches[i],mbFixScale);
-            pSolver->SetRansacParameters(0.99,20,300);
+
+            // Default RANSAC parameters: 0.99,20,300 (probability=0.99, mininliers=6, maxIterations=300)
+            pSolver->SetRansacParameters(0.95,6,300);
             vpSim3Solvers[i] = pSolver;
         }
 
+        ROS_DEBUG_STREAM("Candidate found.");
         nCandidates++;
     }
 
@@ -285,6 +295,7 @@ bool LoopClosing::ComputeSim3()
     // until one is succesful or all fail
     while(nCandidates>0 && !bMatch)
     {
+        ROS_DEBUG_STREAM("nCandidates = " << nCandidates);
         for(int i=0; i<nInitialCandidates; i++)
         {
             if(vbDiscarded[i])
@@ -298,11 +309,12 @@ bool LoopClosing::ComputeSim3()
             bool bNoMore;
 
             Sim3Solver* pSolver = vpSim3Solvers[i];
-            cv::Mat Scm  = pSolver->iterate(5,bNoMore,vbInliers,nInliers);
+            cv::Mat Scm  = pSolver->iterate(10,bNoMore,vbInliers,nInliers); // Default 5 iterations
 
             // If Ransac reachs max. iterations discard keyframe
             if(bNoMore)
             {
+                ROS_DEBUG_STREAM("Ransac reached limit, discarding keyframe.");
                 vbDiscarded[i]=true;
                 nCandidates--;
             }
@@ -310,6 +322,7 @@ bool LoopClosing::ComputeSim3()
             // If RANSAC returns a Sim3, perform a guided matching and optimize with all correspondences
             if(!Scm.empty())
             {
+                ROS_DEBUG_STREAM("Got a Sim3, attempt guided matching.");
                 vector<MapPoint*> vpMapPointMatches(vvpMapPointMatches[i].size(), static_cast<MapPoint*>(NULL));
                 for(size_t j=0, jend=vbInliers.size(); j<jend; j++)
                 {
@@ -325,8 +338,9 @@ bool LoopClosing::ComputeSim3()
                 g2o::Sim3 gScm(Converter::toMatrix3d(R),Converter::toVector3d(t),s);
                 const int nInliers = Optimizer::OptimizeSim3(mpCurrentKF, pKF, vpMapPointMatches, gScm, 10, mbFixScale);
 
+                ROS_DEBUG_STREAM("nInliers required: 20, actual = " << nInliers);
                 // If optimization is succesful stop ransacs and continue
-                if(nInliers>=20)
+                if(nInliers>=20) // Default 20
                 {
                     bMatch = true;
                     mpMatchedKF = pKF;
@@ -341,8 +355,10 @@ bool LoopClosing::ComputeSim3()
         }
     }
 
+
     if(!bMatch)
     {
+        ROS_DEBUG_STREAM("bMatch = 0. Aborting loop closure...");
         for(int i=0; i<nInitialCandidates; i++)
              mvpEnoughConsistentCandidates[i]->SetErase();
         mpCurrentKF->SetErase();
@@ -391,6 +407,7 @@ bool LoopClosing::ComputeSim3()
     }
     else
     {
+        ROS_DEBUG_STREAM("nTotalMatches required: 40, Found = " << nTotalMatches);
         for(int i=0; i<nInitialCandidates; i++)
             mvpEnoughConsistentCandidates[i]->SetErase();
         mpCurrentKF->SetErase();

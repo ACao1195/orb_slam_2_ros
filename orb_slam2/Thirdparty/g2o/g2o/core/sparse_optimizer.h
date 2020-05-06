@@ -127,6 +127,7 @@ namespace g2o {
      * @param spinv: the sparse block matrix with the result
      * @returns false if the operation is not supported by the solver
      */
+
     bool computeMarginals(SparseBlockMatrix<MatrixXd>& spinv, const std::vector<std::pair<int, int> >& blockIndices);
 
     /**
@@ -150,6 +151,9 @@ namespace g2o {
      * @param spinv: the sparse block matrix with the result
      * @returns false if the operation is not supported by the solver
      */
+
+    // VertexContainer defined in optimizable_graph.h
+
     bool computeMarginals(SparseBlockMatrix<MatrixXd>& spinv, const VertexContainer& vertices) {
       std::vector<std::pair<int, int> > indices;
       for (VertexContainer::const_iterator it = vertices.begin(); it != vertices.end(); ++it) {
