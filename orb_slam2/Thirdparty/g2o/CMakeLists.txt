@@ -2,9 +2,11 @@ cmake_minimum_required(VERSION 3.1)
 set(CMAKE_LEGACY_CYGWIN_WIN32 0)
 
 project(g2o)
-message(${g2o_SOURCE_DIR})
 
 include(CPack)
+
+# Override g2o source directory
+set (g2o_SOURCE_DIR "${PROJECT_SOURCE_DIR}/orb_slam2/Thirdparty/g2o")
 
 # The library prefix
 set(LIB_PREFIX g2o_)
@@ -365,7 +367,7 @@ else()
 endif ()
 
 # Set up the top-level include directories
-include_directories(${g2o_SOURCE_DIR} ${PROJECT_BINARY_DIR}/orb_slam2/Thirdparty/g2o)
+include_directories(${g2o_SOURCE_DIR} ${PROJECT_BINARY_DIR})
 
 # Generate config.h
 set(G2O_OPENGL_FOUND ${OPENGL_FOUND})
@@ -375,8 +377,8 @@ set(G2O_SHARED_LIBS ${BUILD_SHARED_LIBS})
 set(G2O_LGPL_SHARED_LIBS ${BUILD_LGPL_SHARED_LIBS})
 set(G2O_CXX_COMPILER "${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER}")
 
-configure_file(config.h.in "${PROJECT_BINARY_DIR}/orb_slam2/Thirdparty/g2o/config.h")
-install(FILES ${PROJECT_BINARY_DIR}/g2o/config.h DESTINATION ${INCLUDES_DESTINATION}/g2o)
+configure_file(${g2o_SOURCE_DIR}/config.h.in "${g2o_SOURCE_DIR}/g2o/config.h")
+install(FILES ${g2o_SOURCE_DIR}/g2o/config.h DESTINATION ${INCLUDES_DESTINATION}/g2o)
 
 
 # Generate cmake configuration scripts
@@ -393,7 +395,7 @@ WRITE_BASIC_PACKAGE_VERSION_FILE(
     "${G2O_VERSION_CONFIG}" VERSION ${G2O_VERSION} COMPATIBILITY SameMajorVersion
 )
 
-configure_file("${g2o_SOURCE_DIR}/orb_slam2/Thirdparty/g2o/cmake_modules/Config.cmake.in" "${G2O_PROJECT_CONFIG}" @ONLY)
+configure_file("${g2o_SOURCE_DIR}/cmake_modules/Config.cmake.in" "${G2O_PROJECT_CONFIG}" @ONLY)
 
 
 install(
@@ -413,5 +415,5 @@ if(BUILD_UNITTESTS)
 endif()
 
 # Include the subdirectories
-add_subdirectory(EXTERNAL)
-add_subdirectory(g2o)
+add_subdirectory(${g2o_SOURCE_DIR}/EXTERNAL)
+add_subdirectory(${g2o_SOURCE_DIR}/g2o)
