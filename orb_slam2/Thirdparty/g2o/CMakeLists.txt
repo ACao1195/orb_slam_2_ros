@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.1)
 set(CMAKE_LEGACY_CYGWIN_WIN32 0)
 
 project(g2o)
+message(${g2o_SOURCE_DIR})
 
 include(CPack)
 
@@ -364,7 +365,7 @@ else()
 endif ()
 
 # Set up the top-level include directories
-include_directories(${g2o_SOURCE_DIR} ${PROJECT_BINARY_DIR})
+include_directories(${g2o_SOURCE_DIR} ${PROJECT_BINARY_DIR}/orb_slam2/Thirdparty/g2o)
 
 # Generate config.h
 set(G2O_OPENGL_FOUND ${OPENGL_FOUND})
