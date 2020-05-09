@@ -118,7 +118,7 @@ endif()
 
 option (G2O_USE_CSPARSE "Build g2o with CSParse support" ON)
 
-find_package(CSparse)
+find_package(CSparse REQUIRED)
 if (G2O_USE_CSPARSE)
   if(CSPARSE_FOUND)
     set(BUILD_CSPARSE OFF CACHE BOOL "Build local CSparse library")
@@ -371,7 +371,6 @@ include_directories(
   ${g2o_SOURCE_DIR}/g2o/core
   ${g2o_SOURCE_DIR}/g2o/types
   ${g2o_SOURCE_DIR}/g2o/stuff
-  ${G2O_EIGEN3_INCLUDE}
   )
 
 # Generate config.h

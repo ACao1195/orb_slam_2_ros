@@ -24,7 +24,7 @@
 #ifndef NCOMPLEX
 #define NCOMPLEX
 #endif
-#include <cs.h>
+#include <suitesparse/cs.h>
 
 #include "g2o_csparse_extension_api.h"
 
