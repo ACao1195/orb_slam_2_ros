@@ -37,6 +37,10 @@ if(NOT OpenCV_FOUND)
 endif()
 
 find_package(Eigen3 3.1.0 REQUIRED)
+find_package(CSparse REQUIRED)
+find_package(G2O REQUIRED)
+ 
+#message(${G2O_LIBRARIES})
 
 set (DYNAMIC_RECONFIGURE_PATH ros/config/dynamic_reconfigure.cfg)
 execute_process(COMMAND chmod a+x ${DYNAMIC_RECONFIGURE_PATH}
@@ -52,15 +56,23 @@ generate_dynamic_reconfigure_options(
 set(LIBS_ORBSLAM
 ${OpenCV_LIBS}
 ${EIGEN3_LIBS}
+${G2O_LIBRARIES}
+
 ${PROJECT_SOURCE_DIR}/orb_slam2/Thirdparty/DBoW2/lib/libDBoW2.so
-${PROJECT_SOURCE_DIR}/orb_slam2/Thirdparty/g2o/lib/libg2o.so
+#${PROJECT_SOURCE_DIR}/orb_slam2/Thirdparty/g2o/lib/libg2o.so
 )
 
 set(LIBS_ROS
 ${PROJECT_SOURCE_DIR}/orb_slam2/lib/lib${PROJECT_NAME}.so
-${OpenCV_LIBS}
+
 ${catkin_LIBRARIES}
+${OpenCV_LIBS}
+${EIGEN3_LIBS}
+${G2O_LIBRARIES}
 )
+
+#message(${LIBS_ROS})
+#message(${CATKIN_PACKAGE_LIB_DESTINATION})
 
 add_service_files(
         FILES
@@ -82,11 +94,13 @@ ${PROJECT_SOURCE_DIR}/orb_slam2
 ${PROJECT_SOURCE_DIR}/orb_slam2/include
 ${PROJECT_SOURCE_DIR}/ros/include
 ${EIGEN3_INCLUDE_DIR}
+${CSPARSE_INCLUDE_DIR}
+${G2O_INCLUDE_DIR}
 ${catkin_INCLUDE_DIRS}
 )
 
 include(${PROJECT_SOURCE_DIR}/orb_slam2/Thirdparty/DBoW2/CMakeLists.txt)
-include(${PROJECT_SOURCE_DIR}/orb_slam2/Thirdparty/g2o/CMakeLists.txt)
+#include(${PROJECT_SOURCE_DIR}/orb_slam2/Thirdparty/g2o/CMakeLists.txt)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/orb_slam2/lib)
 
@@ -109,7 +123,9 @@ orb_slam2/src/KeyFrameDatabase.cc
 orb_slam2/src/Sim3Solver.cc
 orb_slam2/src/Initializer.cc
 )
-add_dependencies (${PROJECT_NAME} g2o DBoW2)
+add_dependencies (${PROJECT_NAME}  DBoW2
+  #G2O
+  )
 
 target_link_libraries(${PROJECT_NAME}
 ${LIBS_ORBSLAM}
@@ -159,7 +175,7 @@ install(TARGETS ${PROJECT_NAME}_mono ${PROJECT_NAME}_stereo ${PROJECT_NAME}_rgbd
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(TARGETS ${PROJECT_NAME} DBoW2 g2o
+install(TARGETS ${PROJECT_NAME} DBoW2 #g2o
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

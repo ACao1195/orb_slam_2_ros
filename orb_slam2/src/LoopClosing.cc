@@ -338,7 +338,7 @@ bool LoopClosing::ComputeSim3()
                 g2o::Sim3 gScm(Converter::toMatrix3d(R),Converter::toVector3d(t),s);
                 const int nInliers = Optimizer::OptimizeSim3(mpCurrentKF, pKF, vpMapPointMatches, gScm, 10, mbFixScale);
 
-                ROS_DEBUG_STREAM("nInliers required: 20, actual = " << nInliers);
+                ROS_DEBUG_STREAM("nInliers required: 10, actual = " << nInliers);
                 // If optimization is succesful stop ransacs and continue
                 if(nInliers>=10) // Default 20
                 {
