@@ -193,9 +193,29 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
 
     // Optimize! For bundle adjustment
     optimizer.initializeOptimization();
-
-    ROS_DEBUG_STREAM("Running general bundle adjustment.");
     optimizer.optimize(nIterations);
+
+
+    // Extract marginals from optimized graph
+    // Get all vertices and store in local vertex container (CURRENTLY NOT WORKING)
+    g2o::OptimizableGraph::VertexContainer localTestVertexContainer;
+    g2o::SparseBlockMatrix<MatrixXd> localTestOutputMatrix;
+
+    for (g2o::OptimizableGraph::VertexIDMap::const_iterator it = optimizer.vertices().begin(); it != optimizer.vertices().end(); ++it) {
+//        ROS_DEBUG_STREAM("it = " << it->second);
+        g2o::OptimizableGraph::Vertex* v = static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
+ //       ROS_DEBUG_STREAM("v = " << v);
+        localTestVertexContainer.push_back(v);
+    }
+    // Will only print value if computeMarginals successfully runs (i.e. input vertices are valid)
+    bool marginalSuccess = optimizer.computeMarginals(localTestOutputMatrix,localTestVertexContainer);
+    if(marginalSuccess){
+        ROS_INFO_STREAM("Covariance of local bundle adjustment:\n" << localTestOutputMatrix << "\n");
+ //   cout << testOutputMatrix.block(0,0) << endl;
+    }
+    else {
+        ROS_DEBUG_STREAM("computeMarginals Success: " << marginalSuccess);
+    }
 
     // Recover optimized data
 
@@ -734,33 +754,6 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
 //    ROS_DEBUG_STREAM("Running local bundle adjustment without outliers.");
     // Local bundle adjustment optimiser #2
     optimizer.optimize(10);
-
-    // Extract marginals from optimized graph - but we want global graph
-
-
-    // Get all vertices and store in local vertex container (CURRENTLY NOT WORKING)
-    g2o::OptimizableGraph::VertexContainer localTestVertexContainer;
-    g2o::SparseBlockMatrix<MatrixXd> localTestOutputMatrix;
-
-    for (g2o::OptimizableGraph::VertexIDMap::const_iterator it = optimizer.vertices().begin(); it != optimizer.vertices().end(); ++it) {
-//        ROS_DEBUG_STREAM("it = " << it->second);
-        g2o::OptimizableGraph::Vertex* v = static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
- //       ROS_DEBUG_STREAM("v = " << v);
-        localTestVertexContainer.push_back(v);
-    }
-
-
- //    // Will only print value if computeMarginals successfully runs (i.e. input vertices are valid)
- //    bool marginalSuccess = optimizer.computeMarginals(localTestOutputMatrix,optimizer.vertex(0));
-
- //    if(marginalSuccess){
- //        ROS_INFO_STREAM("Covariance of local bundle adjustment:\n" << localTestOutputMatrix << "\n");
- // //   cout << testOutputMatrix.block(0,0) << endl;
- //    }
- //    else {
- //        ROS_DEBUG_STREAM("computeMarginals Success: " << marginalSuccess);
- //    }
-
     
     }
 

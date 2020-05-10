@@ -73,7 +73,7 @@ void LoopClosing::Run()
                // Compute similarity transformation [sR|t]
                // In the stereo/RGBD case s=1
                if(ComputeSim3())
-               {    ROS_DEBUG_STREAM("Loop Closure: Computed Sim3. Performing loop closure...");
+               {    ROS_DEBUG_STREAM("Loop Closure: Computed SE(3). Performing loop closure...");
                    // Perform loop fusion and pose graph optimization
                    CorrectLoop();
                }
