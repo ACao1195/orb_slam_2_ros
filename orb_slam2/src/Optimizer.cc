@@ -750,16 +750,16 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
     }
 
 
-    // Will only print value if computeMarginals successfully runs (i.e. input vertices are valid)
-    bool marginalSuccess = optimizer.computeMarginals(localTestOutputMatrix,optimizer.vertex(0));
+ //    // Will only print value if computeMarginals successfully runs (i.e. input vertices are valid)
+ //    bool marginalSuccess = optimizer.computeMarginals(localTestOutputMatrix,optimizer.vertex(0));
 
-    if(marginalSuccess){
-        ROS_INFO_STREAM("Covariance of local bundle adjustment:\n" << localTestOutputMatrix << "\n");
- //   cout << testOutputMatrix.block(0,0) << endl;
-    }
-    else {
-        ROS_DEBUG_STREAM("computeMarginals Success: " << marginalSuccess);
-    }
+ //    if(marginalSuccess){
+ //        ROS_INFO_STREAM("Covariance of local bundle adjustment:\n" << localTestOutputMatrix << "\n");
+ // //   cout << testOutputMatrix.block(0,0) << endl;
+ //    }
+ //    else {
+ //        ROS_DEBUG_STREAM("computeMarginals Success: " << marginalSuccess);
+ //    }
 
     
     }

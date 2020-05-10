@@ -285,7 +285,7 @@ bool LoopClosing::ComputeSim3()
             vpSim3Solvers[i] = pSolver;
         }
 
-        ROS_DEBUG_STREAM("Candidate found.");
+        ROS_DEBUG_STREAM("Candidate found, matches = " << nmatches);
         nCandidates++;
     }
 
@@ -340,7 +340,7 @@ bool LoopClosing::ComputeSim3()
 
                 ROS_DEBUG_STREAM("nInliers required: 20, actual = " << nInliers);
                 // If optimization is succesful stop ransacs and continue
-                if(nInliers>=20) // Default 20
+                if(nInliers>=10) // Default 20
                 {
                     bMatch = true;
                     mpMatchedKF = pKF;

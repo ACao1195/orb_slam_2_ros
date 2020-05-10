@@ -84,7 +84,9 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
 
     // Max/Min Frames to insert keyframes and to check relocalisation
     mMinFrames = 0;
-    mMaxFrames = fps;
+
+    // Default = fps; overriden for more frames
+    mMaxFrames = 5;
 
     cout << endl << "Camera Parameters: " << endl;
     cout << "- fx: " << fx << endl;
@@ -1019,7 +1021,8 @@ bool Tracking::NeedNewKeyFrame()
         }
     }
 
-    bool bNeedToInsertClose = (nTrackedClose<100) && (nNonTrackedClose>70);
+    // Default nTrackedClose<100 && nNonTrackedClose>70
+    bool bNeedToInsertClose = (nTrackedClose<50) && (nNonTrackedClose>0);
 
     // Thresholds
     float thRefRatio = 0.75f;
