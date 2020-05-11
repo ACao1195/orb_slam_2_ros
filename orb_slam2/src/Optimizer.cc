@@ -1,4 +1,4 @@
-﻿/**
+﻿/*
 * This file is part of ORB-SLAM2.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
@@ -43,25 +43,21 @@ using namespace g2o;
 
 // Define typings for the linear and block solver, using CSparse 6x3 (for local bundle adjustment),
 // CSparse 7x3 (for optimising the essential graph) and the dense solver (for global bundle adjustment)
-typedef LinearSolverCSparse<BlockSolver_6_3::PoseMatrixType> localLinearSolver;
-typedef BlockSolver<BlockSolverTraits<6,3>> localBlockSolver;
+typedef LinearSolverCSparse<BlockSolver_6_3::PoseMatrixType> sparseLinearSolver;
+typedef BlockSolver<BlockSolverTraits<6,3>> sparseBlockSolver;
 
-typedef LinearSolverDense<BlockSolver_6_3::PoseMatrixType> globalLinearSolver;
-typedef BlockSolver<BlockSolverTraits<6,3>> globalBlockSolver;
+typedef LinearSolverDense<BlockSolver_6_3::PoseMatrixType> denseLinearSolver;
+typedef BlockSolver<BlockSolverTraits<6,3>> denseBlockSolver;
 
 typedef LinearSolverCSparse<BlockSolver_7_3::PoseMatrixType> essentialLinearSolver;
 typedef BlockSolver<BlockSolverTraits<7,3>> essentialBlockSolver;
 
 namespace ORB_SLAM2
-{
-
-    // Global variables to store covariance data
-    OptimizableGraph::VertexContainer testVertexContainer;
-    SparseBlockMatrix<MatrixXd> testOutputMatrix;
-    
+{    
 
 void Optimizer::GlobalBundleAdjustemnt(Map* pMap, int nIterations, bool* pbStopFlag, const unsigned long nLoopKF, const bool bRobust)
 {
+    ROS_DEBUG_STREAM("Retrieving keyframes and mappoints");
     vector<KeyFrame*> vpKFs = pMap->GetAllKeyFrames();
     vector<MapPoint*> vpMP = pMap->GetAllMapPoints();
     BundleAdjustment(vpKFs,vpMP,nIterations,pbStopFlag, nLoopKF, bRobust);
@@ -74,7 +70,6 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
     vector<bool> vbNotIncludedMP;
     vbNotIncludedMP.resize(vpMP.size());
 
-    g2o::SparseOptimizer optimizer;
 
     // // Old solver setup
     // g2o::BlockSolver_6_3::LinearSolverType * linearSolver;
@@ -83,14 +78,15 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
     // g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
 
     // New Solver Setup
-    auto linearSolver = g2o::make_unique<globalLinearSolver>();
+    auto linearSolver = g2o::make_unique<sparseLinearSolver>();
 
     // Create block solver on top of the linear solver
-    auto blockSolver = g2o::make_unique<globalBlockSolver>(std::move(linearSolver));
+    auto blockSolver = g2o::make_unique<sparseBlockSolver>(std::move(linearSolver));
 
     // Create algorithm to carry out optimisation
     OptimizationAlgorithmLevenberg* solver = new OptimizationAlgorithmLevenberg(std::move(blockSolver));
 
+    g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
 
     if(pbStopFlag)
@@ -127,6 +123,7 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
         const int id = pMP->mnId+maxKFid+1;
         vPoint->setId(id);
         vPoint->setMarginalized(true);
+
         optimizer.addVertex(vPoint);
 
        const map<KeyFrame*,size_t> observations = pMP->GetObservations();
@@ -217,32 +214,53 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
     // Optimize! For bundle adjustment
     optimizer.initializeOptimization();
 
-    ROS_DEBUG_STREAM("Running general bundle adjustment.");
+    ROS_DEBUG_STREAM("Running global bundle adjustment.");
     optimizer.optimize(nIterations);
+    ROS_DEBUG_STREAM("Global bundle adjustment done.");
 
-    // Extract marginals from optimized graph
-    // Get all vertices and store in local vertex container (CURRENTLY NOT WORKING)
-    g2o::OptimizableGraph::VertexContainer localTestVertexContainer;
-    g2o::SparseBlockMatrix<MatrixXd> localTestOutputMatrix;
+    // Global variables to store covariance data
+    // OptimizableGraph::VertexContainer testVertexContainer;
+    // SparseBlockMatrix<MatrixXd> testOutputMatrix;
 
-    for (g2o::OptimizableGraph::VertexIDMap::const_iterator it = optimizer.vertices().begin(); it != optimizer.vertices().end(); ++it) {
-//        ROS_DEBUG_STREAM("it = " << it->second);
-        g2o::OptimizableGraph::Vertex* v = static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
- //       ROS_DEBUG_STREAM("v = " << v);
-        localTestVertexContainer.push_back(v);
-    }
+    // Store the indices of the world points
+    // std::vector<std::pair<int, int>> globalBlockIndices;
+    // g2o::SparseBlockMatrix<MatrixXd> localTestOutputMatrix;
 
+    // ROS_DEBUG_STREAM("Getting vertices");
+    // // Retrieve the last vertex and add it to blockIndices
+    // OptimizableGraph::Vertex* pVertex = optimizer.activeVertices()[id-1];
+
+    // ROS_DEBUG_STREAM("Got active vertex");
+    // // Add the id of the mapPoint to the index
+    // if (pVertex->hessianIndex()>=0){
+    //     globalBlockIndices.push_back(make_pair(pVertex->hessianIndex(), pVertex->hessianIndex()));
+    // }
+
+
+ //    // Extract marginals from optimized graph
+     
+ //    for (size_t i=0; i<3/*optimizer.activeVertices().size()*/; i++) { // Full size fails due to speed issues
+ //        OptimizableGraph::Vertex* v=optimizer.activeVertices()[i];
+ //        if (v->hessianIndex()>=0){
+ //          blockIndices.push_back(make_pair(v->hessianIndex(), v->hessianIndex()));
+ //        }
+ //        ROS_DEBUG_STREAM("Finished creating indices " << v->hessianIndex());
+ //    }
+    
+ //    // ROS_DEBUG_STREAM("Total vertices = " << optimizer.activeVertices().size());
 
     // Will only print value if computeMarginals successfully runs (i.e. input vertices are valid)
-    bool marginalSuccess = optimizer.computeMarginals(localTestOutputMatrix,optimizer.vertex(0));
+ //    bool marginalSuccess = optimizer.computeMarginals(localTestOutputMatrix,blockIndices);
 
-    if(marginalSuccess){
-        ROS_INFO_STREAM("Covariance of local bundle adjustment:\n" << localTestOutputMatrix << "\n");
- //   cout << testOutputMatrix.block(0,0) << endl;
-    }
-    else {
-        ROS_DEBUG_STREAM("computeMarginals Success: " << marginalSuccess);
-    }
+ //    if(marginalSuccess){
+ //        ROS_INFO_STREAM("Covariance of local bundle adjustment:\n");
+ //        // MatrixXd& cov = *(localTestOutputMatrix.block(1,1));
+ //        // std::cout << cov << endl;
+ // //   cout << testOutputMatrix.block(0,0) << endl;
+ //    }
+ //    else {
+ //        ROS_DEBUG_STREAM("computeMarginals Success: " << marginalSuccess);
+ //    }    
 
     // Recover optimized data
 
@@ -295,8 +313,6 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
 
 int Optimizer::PoseOptimization(Frame *pFrame)
 {
-    g2o::SparseOptimizer optimizer;
-
     // // Old solver setup
 
     // g2o::BlockSolver_6_3::LinearSolverType * linearSolver;
@@ -305,10 +321,16 @@ int Optimizer::PoseOptimization(Frame *pFrame)
     // g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
 
     // New Solver Setup - using dense solver
-    auto linearSolver = g2o::make_unique<globalLinearSolver>();
-    auto blockSolver = g2o::make_unique<globalBlockSolver>(std::move(linearSolver));
+    auto linearSolver = g2o::make_unique<denseLinearSolver>();
+    auto blockSolver = g2o::make_unique<denseBlockSolver>(std::move(linearSolver));
+ 
+     // Create algorithm to carry out optimisation
     OptimizationAlgorithmLevenberg* solver = new OptimizationAlgorithmLevenberg(std::move(blockSolver));
+    // OptimizationAlgorithmLevenberg* solver = new OptimizationAlgorithmLevenberg(g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver)));
+    // Newer method - doesnt work
+ //   g2o::OptimizationAlgorithmLevenberg solver{g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver))};
 
+    g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
 
     int nInitialCorrespondences=0;
@@ -518,6 +540,7 @@ int Optimizer::PoseOptimization(Frame *pFrame)
 
 void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap)
 {    
+//    ROS_DEBUG_STREAM("Doing local bundle adjustment");
     // Local KeyFrames: First Breath Search from Current Keyframe
     list<KeyFrame*> lLocalKeyFrames;
 
@@ -569,9 +592,6 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
         }
     }
 
-    // Setup optimizer
-    g2o::SparseOptimizer optimizer;
-
     // // Old Solver setup
     // g2o::BlockSolver_6_3::LinearSolverType * linearSolver;
     // linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();
@@ -579,10 +599,17 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
     // g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
 
     // New solver setup
-    auto linearSolver = g2o::make_unique<localLinearSolver>();
-    auto blockSolver = g2o::make_unique<localBlockSolver>(std::move(linearSolver));
-    OptimizationAlgorithmLevenberg* solver = new OptimizationAlgorithmLevenberg(std::move(blockSolver));
+    auto linearSolver = g2o::make_unique<sparseLinearSolver>();
+    auto blockSolver = g2o::make_unique<sparseBlockSolver>(std::move(linearSolver));
 
+//    ROS_DEBUG_STREAM("Setting solver...");
+     // Create algorithm to carry out optimisation
+    OptimizationAlgorithmLevenberg* solver = new OptimizationAlgorithmLevenberg(std::move(blockSolver));
+ //   OptimizationAlgorithmLevenberg* solver = new OptimizationAlgorithmLevenberg(g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver)));
+    // Newer method - doesnt work
+ // g2o::OptimizationAlgorithmLevenberg solver{g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver))};
+
+    g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
 
     if(pbStopFlag)
@@ -792,7 +819,61 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
 //    ROS_DEBUG_STREAM("Running local bundle adjustment without outliers.");
     // Local bundle adjustment optimiser #2
     optimizer.optimize(10);
+
+/************************************************/
+//     // TESTING AREA FOR GETTING COVARIANCES
+//     std::vector<std::pair<int, int>> blockIndices;
+//     g2o::SparseBlockMatrix<MatrixXd> localTestOutputMatrix;
+
+//     for (size_t i=0; i<3/*optimizer.activeVertices().size()*/; i++) { // Full size fails due to speed issues
+//         OptimizableGraph::Vertex* v=optimizer.activeVertices()[i];
+//         if (v->hessianIndex()>=0){
+//           blockIndices.push_back(make_pair(v->hessianIndex(), v->hessianIndex()));
+//         }
+
+//         std::cout << v->estimateDimension();
+
+//         ROS_DEBUG_STREAM("Stored Block indices.");
+
+//         // 3D vector
+//         std::vector<double> mean;
+//         // Get current estimate position
+//         if(v->getMinimalEstimateData(&mean[0])){
+//             std::cout << mean.size() << endl;
+//         }
+
+        
+//         ROS_DEBUG_STREAM("Finished creating indices " << v->hessianIndex());
+//     }
     
+
+// //     for (size_t i = 0; optimizer.activeVertices().begin(); it != optimizer.activeVertices().end(); ++it) {
+// // //        ROS_DEBUG_STREAM("it = " << it->second);
+// //         g2o::OptimizableGraph::Vertex* v = static_cast<g2o::OptimizableGraph::Vertex*>(it->second);
+// // //        ROS_DEBUG_STREAM("v = " << v);
+// //         localTestVertexContainer.push_back(v);
+// //     }
+
+//     // ROS_DEBUG_STREAM("Total vertices = " << optimizer.activeVertices().size());
+
+//     // Will only print value if computeMarginals successfully runs (i.e. input vertices are valid)
+//     bool marginalSuccess = optimizer.computeMarginals(localTestOutputMatrix,blockIndices);
+
+//     if(marginalSuccess){
+//         ROS_INFO_STREAM("Covariance of local bundle adjustment:\n");
+//         MatrixXd& cov = *(localTestOutputMatrix.block(1,1));
+//         std::cout << cov << endl;
+//  //   cout << testOutputMatrix.block(0,0) << endl;
+//     }
+//     else {
+//         ROS_DEBUG_STREAM("computeMarginals Success: " << marginalSuccess);
+//     }    
+
+/***************************************************/
+    
+
+
+
     }
 
     vector<pair<KeyFrame*,MapPoint*> > vToErase;
@@ -870,9 +951,6 @@ void Optimizer::OptimizeEssentialGraph(Map* pMap, KeyFrame* pLoopKF, KeyFrame* p
                                        const LoopClosing::KeyFrameAndPose &CorrectedSim3,
                                        const map<KeyFrame *, set<KeyFrame *> > &LoopConnections, const bool &bFixScale)
 {
-    // Setup optimizer
-    g2o::SparseOptimizer optimizer;
-    optimizer.setVerbose(false);
 
     // // Old Solver setup
     // g2o::BlockSolver_7_3::LinearSolverType * linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_7_3::PoseMatrixType>();
@@ -882,11 +960,20 @@ void Optimizer::OptimizeEssentialGraph(Map* pMap, KeyFrame* pLoopKF, KeyFrame* p
     // New Solver Setup
     auto linearSolver = g2o::make_unique<essentialLinearSolver>();
     auto blockSolver = g2o::make_unique<essentialBlockSolver>(std::move(linearSolver));
+     // Create algorithm to carry out optimisation
     OptimizationAlgorithmLevenberg* solver = new OptimizationAlgorithmLevenberg(std::move(blockSolver));
-
+//    OptimizationAlgorithmLevenberg* solver = new OptimizationAlgorithmLevenberg(g2o::make_unique<g2o::BlockSolver_7_3>(std::move(linearSolver)));
+    // Newer method - doesnt work
+ // g2o::OptimizationAlgorithmLevenberg solver{g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver))};
+    
     solver->setUserLambdaInit(1e-16);
-    optimizer.setAlgorithm(solver);
 
+    // Setup optimizer
+    g2o::SparseOptimizer optimizer;
+    optimizer.setVerbose(false);
+
+    optimizer.setAlgorithm(solver);
+    
     const vector<KeyFrame*> vpKFs = pMap->GetAllKeyFrames();
     const vector<MapPoint*> vpMPs = pMap->GetAllMapPoints();
 
@@ -1141,7 +1228,6 @@ void Optimizer::OptimizeEssentialGraph(Map* pMap, KeyFrame* pLoopKF, KeyFrame* p
 
 int Optimizer::OptimizeSim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint *> &vpMatches1, g2o::Sim3 &g2oS12, const float th2, const bool bFixScale)
 {
-    g2o::SparseOptimizer optimizer;
 
     // Old solver
     // g2o::BlockSolverX::LinearSolverType * linearSolver;
@@ -1150,10 +1236,16 @@ int Optimizer::OptimizeSim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint *> &
     // g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
 
     // New solver
-    auto linearSolver = g2o::make_unique<globalLinearSolver>();
-    auto blockSolver = g2o::make_unique<globalBlockSolver>(std::move(linearSolver));
-    OptimizationAlgorithmLevenberg* solver = new OptimizationAlgorithmLevenberg(std::move(blockSolver));
+    auto linearSolver = g2o::make_unique<denseLinearSolver>();
+    auto blockSolver = g2o::make_unique<denseBlockSolver>(std::move(linearSolver));
 
+    // Create algorithm to carry out optimisation
+    OptimizationAlgorithmLevenberg* solver = new OptimizationAlgorithmLevenberg(std::move(blockSolver));
+    // OptimizationAlgorithmLevenberg* solver = new OptimizationAlgorithmLevenberg(g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver)));
+    // Newer method - doesnt work
+ //   g2o::OptimizationAlgorithmLevenberg solver{g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver))};
+
+    g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
 
     // Calibration
@@ -1282,6 +1374,7 @@ int Optimizer::OptimizeSim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint *> &
     ROS_DEBUG_STREAM("Optimising Sim3.");
     optimizer.initializeOptimization();
     optimizer.optimize(5);
+    ROS_DEBUG_STREAM("Optimised Sim3");
 
     // Check inliers
     int nBad=0;

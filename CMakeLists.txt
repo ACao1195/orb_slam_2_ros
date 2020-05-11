@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(orb_slam2_ros)
 
+#SET(CMAKE_BUILD_TYPE Debug)
 IF(NOT CMAKE_BUILD_TYPE)
   SET(CMAKE_BUILD_TYPE Release)
 ENDIF()
@@ -40,7 +41,6 @@ find_package(Eigen3 3.1.0 REQUIRED)
 find_package(CSparse REQUIRED)
 find_package(G2O REQUIRED)
  
-#message(${G2O_LIBRARIES})
 
 set (DYNAMIC_RECONFIGURE_PATH ros/config/dynamic_reconfigure.cfg)
 execute_process(COMMAND chmod a+x ${DYNAMIC_RECONFIGURE_PATH}

@@ -457,6 +457,7 @@ void LoopClosing::CorrectLoop()
     cv::Mat Twc = mpCurrentKF->GetPoseInverse();
 
 
+    ROS_DEBUG_STREAM("Map mutex");
     {
         // Get Map Mutex
         unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
@@ -553,6 +554,8 @@ void LoopClosing::CorrectLoop()
 
     }
 
+    ROS_DEBUG_STREAM("Search and fuse SE(3)");
+
     // Project MapPoints observed in the neighborhood of the loop keyframe
     // into the current keyframe and neighbors using corrected poses.
     // Fuse duplications.
@@ -580,6 +583,8 @@ void LoopClosing::CorrectLoop()
         }
     }
 
+    ROS_DEBUG_STREAM("Optimising essential graph.");
+
     // Optimize graph
     Optimizer::OptimizeEssentialGraph(mpMap, mpMatchedKF, mpCurrentKF, NonCorrectedSim3, CorrectedSim3, LoopConnections, mbFixScale);
 
@@ -589,6 +594,7 @@ void LoopClosing::CorrectLoop()
     mpMatchedKF->AddLoopEdge(mpCurrentKF);
     mpCurrentKF->AddLoopEdge(mpMatchedKF);
 
+    ROS_DEBUG_STREAM("Launching GlobalBundleAdjustment thread");
     // Launch a new thread to perform Global Bundle Adjustment
     mbRunningGBA = true;
     mbFinishedGBA = false;

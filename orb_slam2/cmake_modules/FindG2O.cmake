@@ -1,6 +1,7 @@
 # Find the header files
 
 find_path(G2O_INCLUDE_DIR g2o/core/base_vertex.h
+  /opt/ros/melodic/include
   ${G2O_ROOT}/include
   $ENV{G2O_ROOT}/include
   $ENV{G2O_ROOT}
