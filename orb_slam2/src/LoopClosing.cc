@@ -75,7 +75,7 @@ void LoopClosing::Run()
                 // Compute similarity transformation [sR|t]
                 // In the stereo/RGBD case s=1
 //              if(ComputeSim3())  // Default check
-                if(loopCount == 20){
+                if(loopCount == 10){
                     // Override - run global bundle adjustment every 20 loops
                    // Perform loop fusion and pose graph optimization
                    CorrectLoop();

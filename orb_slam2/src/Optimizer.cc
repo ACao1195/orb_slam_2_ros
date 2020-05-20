@@ -70,7 +70,6 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
     vector<bool> vbNotIncludedMP;
     vbNotIncludedMP.resize(vpMP.size());
 
-
     // // Old solver setup
     // g2o::BlockSolver_6_3::LinearSolverType * linearSolver;
     // linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();
@@ -93,6 +92,10 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
         optimizer.setForceStopFlag(pbStopFlag);
 
     long unsigned int maxKFid = 0;
+
+    // Output total keyframes and mappoints
+    ROS_DEBUG_STREAM("Number of keyframes = " << vpKFs.size() << ", number of mapPoints = " << vpMP.size());
+    //
 
     // Set KeyFrame vertices
     for(size_t i=0; i<vpKFs.size(); i++)
@@ -126,7 +129,7 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
 
         optimizer.addVertex(vPoint);
 
-       const map<KeyFrame*,size_t> observations = pMP->GetObservations();
+        const map<KeyFrame*,size_t> observations = pMP->GetObservations();
 
         int nEdges = 0;
         //SET EDGES
@@ -214,55 +217,64 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
     // Optimize! For bundle adjustment
     optimizer.initializeOptimization();
 
+
+//////////////////////////////////////////////////////////
+    ROS_DEBUG_STREAM("Size of activeVertices = " << optimizer.activeVertices().size());
+
+    // // Retrieve the last vertex and add it to blockIndices
+    // OptimizableGraph::Vertex* pVertex = optimizer.activeVertices()[0];
+
+    // ROS_DEBUG_STREAM("Got vertex");
+
+    // // Add the id of the mapPoint to the index
+    // if (pVertex->hessianIndex()>=0){
+    //     globalBlockIndices.push_back(make_pair(pVertex->hessianIndex(), pVertex->hessianIndex()));
+    //     ROS_DEBUG_STREAM("Vertex index = " << pVertex->hessianIndex());
+    //     }
+    //     ////////////////////////////////////////////
+
     ROS_DEBUG_STREAM("Running global bundle adjustment.");
     optimizer.optimize(nIterations);
     ROS_DEBUG_STREAM("Global bundle adjustment done.");
 
-    // Global variables to store covariance data
-    // OptimizableGraph::VertexContainer testVertexContainer;
-    // SparseBlockMatrix<MatrixXd> testOutputMatrix;
-
-    // Store the indices of the world points
-    // std::vector<std::pair<int, int>> globalBlockIndices;
-    // g2o::SparseBlockMatrix<MatrixXd> localTestOutputMatrix;
-
-    // ROS_DEBUG_STREAM("Getting vertices");
-    // // Retrieve the last vertex and add it to blockIndices
-    // OptimizableGraph::Vertex* pVertex = optimizer.activeVertices()[id-1];
-
-    // ROS_DEBUG_STREAM("Got active vertex");
-    // // Add the id of the mapPoint to the index
-    // if (pVertex->hessianIndex()>=0){
-    //     globalBlockIndices.push_back(make_pair(pVertex->hessianIndex(), pVertex->hessianIndex()));
-    // }
 
 
- //    // Extract marginals from optimized graph
-     
- //    for (size_t i=0; i<3/*optimizer.activeVertices().size()*/; i++) { // Full size fails due to speed issues
- //        OptimizableGraph::Vertex* v=optimizer.activeVertices()[i];
- //        if (v->hessianIndex()>=0){
- //          blockIndices.push_back(make_pair(v->hessianIndex(), v->hessianIndex()));
- //        }
- //        ROS_DEBUG_STREAM("Finished creating indices " << v->hessianIndex());
- //    }
+///////////////////////////////////////////////
+    // Extract marginals from optimized graph
+
+    ROS_DEBUG_STREAM("Total active vertices after bundle adjustment = " << optimizer.activeVertices().size());
+
+    // Store the indices of the world points and covariance matrix from computeMarginals
+    std::vector<std::pair<int, int>> globalBlockIndices;
+    g2o::SparseBlockMatrix<MatrixXd> localTestOutputMatrix;
     
- //    // ROS_DEBUG_STREAM("Total vertices = " << optimizer.activeVertices().size());
+    // Get the indices of all the mappoints 
+    for (size_t i=0; i<100 /*vpMP.size()-1*/; i++) { // Full size fails due to speed issues
+        OptimizableGraph::Vertex* v=optimizer.activeVertices()[i+vpKFs.size()]; // Offset by number of KFs
+        if (v->hessianIndex()>=0){
+            globalBlockIndices.push_back(make_pair(v->hessianIndex(), v->hessianIndex()));
+            // ROS_DEBUG_STREAM("Finished creating indices " << v->hessianIndex());
+        }
+
+    }
+
+    ROS_DEBUG_STREAM("Populated globalBlockIndices, size = " << globalBlockIndices.size());
 
     // Will only print value if computeMarginals successfully runs (i.e. input vertices are valid)
- //    bool marginalSuccess = optimizer.computeMarginals(localTestOutputMatrix,blockIndices);
+    if(optimizer.computeMarginals(localTestOutputMatrix,globalBlockIndices)){
+        ROS_INFO_STREAM("Covariance of local bundle adjustment:\n");
+        MatrixXd& cov = *(localTestOutputMatrix.block(1,1));
+        std::cout << cov << endl;
+        //cout << testOutputMatrix.block(0,0) << endl;
+    }
+    else {
+        ROS_DEBUG_STREAM("computeMarginals failed");
+    }    
+/////////////////////////////////////////////////
 
- //    if(marginalSuccess){
- //        ROS_INFO_STREAM("Covariance of local bundle adjustment:\n");
- //        // MatrixXd& cov = *(localTestOutputMatrix.block(1,1));
- //        // std::cout << cov << endl;
- // //   cout << testOutputMatrix.block(0,0) << endl;
- //    }
- //    else {
- //        ROS_DEBUG_STREAM("computeMarginals Success: " << marginalSuccess);
- //    }    
 
     // Recover optimized data
+    ROS_DEBUG_STREAM("Recovering optimized data...");
 
     //Keyframes
     for(size_t i=0; i<vpKFs.size(); i++)
