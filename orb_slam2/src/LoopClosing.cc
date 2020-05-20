@@ -61,22 +61,29 @@ void LoopClosing::Run()
     ROS_DEBUG_STREAM("Checking for loop closures...");
 
     mbFinished =false;
+    int loopCount = 0;
 
-    while(1)
-    {
+    while(1){
         // Check if there are keyframes in the queue
-        if(CheckNewKeyFrames())
-        { //ROS_DEBUG_STREAM("Loop Closure: Found new keyframe, check for loop closure...");
+        if(CheckNewKeyFrames()){ 
+            //ROS_DEBUG_STREAM("Loop Closure: Found new keyframe, check for loop closure...");
             // Detect loop candidates and check covisibility consistency
-            if(DetectLoop())
-            { ROS_DEBUG_STREAM("Loop Closure: Found loop with covisibility consistency, check for Sim3...");
-               // Compute similarity transformation [sR|t]
-               // In the stereo/RGBD case s=1
-               if(ComputeSim3())
-               {    ROS_DEBUG_STREAM("Loop Closure: Computed SE(3). Performing loop closure...");
+            if(DetectLoop()){   
+            // ROS_DEBUG_STREAM("Loop Closure: Found loop with covisibility consistency.");
+                ROS_DEBUG_STREAM("Loop closure possible, count = " << loopCount);
+
+                // Compute similarity transformation [sR|t]
+                // In the stereo/RGBD case s=1
+//              if(ComputeSim3())  // Default check
+                if(loopCount == 20){
+                    // Override - run global bundle adjustment every 20 loops
                    // Perform loop fusion and pose graph optimization
                    CorrectLoop();
-               }
+                   loopCount = 0;
+                }
+                else{
+                    loopCount++;
+                }               
             }
         }
 
@@ -272,7 +279,7 @@ bool LoopClosing::ComputeSim3()
 
         if(nmatches<6) // Default 20
         {
-            ROS_DEBUG_STREAM("Not enough BoW matches. Need 20, have: " << nmatches);
+            ROS_DEBUG_STREAM("Not enough BoW matches. Need 6, have: " << nmatches);
             vbDiscarded[i] = true;
             continue;
         }
@@ -295,11 +302,13 @@ bool LoopClosing::ComputeSim3()
     // until one is succesful or all fail
     while(nCandidates>0 && !bMatch)
     {
-        ROS_DEBUG_STREAM("nCandidates = " << nCandidates);
         for(int i=0; i<nInitialCandidates; i++)
         {
+
             if(vbDiscarded[i])
                 continue;
+
+            ROS_DEBUG_STREAM("nCandidates = " << nCandidates);
 
             KeyFrame* pKF = mvpEnoughConsistentCandidates[i];
 
@@ -449,150 +458,157 @@ void LoopClosing::CorrectLoop()
     mpCurrentKF->UpdateConnections();
 
     // Retrive keyframes connected to the current keyframe and compute corrected Sim3 pose by propagation
-    mvpCurrentConnectedKFs = mpCurrentKF->GetVectorCovisibleKeyFrames();
-    mvpCurrentConnectedKFs.push_back(mpCurrentKF);
+    // mvpCurrentConnectedKFs = mpCurrentKF->GetVectorCovisibleKeyFrames();
+    // mvpCurrentConnectedKFs.push_back(mpCurrentKF);
 
-    KeyFrameAndPose CorrectedSim3, NonCorrectedSim3;
-    CorrectedSim3[mpCurrentKF]=mg2oScw;
-    cv::Mat Twc = mpCurrentKF->GetPoseInverse();
+    // KeyFrameAndPose CorrectedSim3, NonCorrectedSim3;
+    // CorrectedSim3[mpCurrentKF]=mg2oScw;
+    // cv::Mat Twc = mpCurrentKF->GetPoseInverse();
 
 
     ROS_DEBUG_STREAM("Map mutex");
-    {
+ //   {
         // Get Map Mutex
         unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
 
-        for(vector<KeyFrame*>::iterator vit=mvpCurrentConnectedKFs.begin(), vend=mvpCurrentConnectedKFs.end(); vit!=vend; vit++)
-        {
-            KeyFrame* pKFi = *vit;
-
-            cv::Mat Tiw = pKFi->GetPose();
-
-            if(pKFi!=mpCurrentKF)
-            {
-                cv::Mat Tic = Tiw*Twc;
-                cv::Mat Ric = Tic.rowRange(0,3).colRange(0,3);
-                cv::Mat tic = Tic.rowRange(0,3).col(3);
-                g2o::Sim3 g2oSic(Converter::toMatrix3d(Ric),Converter::toVector3d(tic),1.0);
-                g2o::Sim3 g2oCorrectedSiw = g2oSic*mg2oScw;
-                //Pose corrected with the Sim3 of the loop closure
-                CorrectedSim3[pKFi]=g2oCorrectedSiw;
-            }
-
-            cv::Mat Riw = Tiw.rowRange(0,3).colRange(0,3);
-            cv::Mat tiw = Tiw.rowRange(0,3).col(3);
-            g2o::Sim3 g2oSiw(Converter::toMatrix3d(Riw),Converter::toVector3d(tiw),1.0);
-            //Pose without correction
-            NonCorrectedSim3[pKFi]=g2oSiw;
-        }
-
-        // Correct all MapPoints obsrved by current keyframe and neighbors, so that they align with the other side of the loop
-        for(KeyFrameAndPose::iterator mit=CorrectedSim3.begin(), mend=CorrectedSim3.end(); mit!=mend; mit++)
-        {
-            KeyFrame* pKFi = mit->first;
-            g2o::Sim3 g2oCorrectedSiw = mit->second;
-            g2o::Sim3 g2oCorrectedSwi = g2oCorrectedSiw.inverse();
-
-            g2o::Sim3 g2oSiw =NonCorrectedSim3[pKFi];
-
-            vector<MapPoint*> vpMPsi = pKFi->GetMapPointMatches();
-            for(size_t iMP=0, endMPi = vpMPsi.size(); iMP<endMPi; iMP++)
-            {
-                MapPoint* pMPi = vpMPsi[iMP];
-                if(!pMPi)
-                    continue;
-                if(pMPi->isBad())
-                    continue;
-                if(pMPi->mnCorrectedByKF==mpCurrentKF->mnId)
-                    continue;
-
-                // Project with non-corrected pose and project back with corrected pose
-                cv::Mat P3Dw = pMPi->GetWorldPos();
-                Eigen::Matrix<double,3,1> eigP3Dw = Converter::toVector3d(P3Dw);
-                Eigen::Matrix<double,3,1> eigCorrectedP3Dw = g2oCorrectedSwi.map(g2oSiw.map(eigP3Dw));
-
-                cv::Mat cvCorrectedP3Dw = Converter::toCvMat(eigCorrectedP3Dw);
-                pMPi->SetWorldPos(cvCorrectedP3Dw);
-                pMPi->mnCorrectedByKF = mpCurrentKF->mnId;
-                pMPi->mnCorrectedReference = pKFi->mnId;
-                pMPi->UpdateNormalAndDepth();
-            }
-
-            // Update keyframe pose with corrected Sim3. First transform Sim3 to SE3 (scale translation)
-            Eigen::Matrix3d eigR = g2oCorrectedSiw.rotation().toRotationMatrix();
-            Eigen::Vector3d eigt = g2oCorrectedSiw.translation();
-            double s = g2oCorrectedSiw.scale();
-
-            eigt *=(1./s); //[R t/s;0 1]
-
-            cv::Mat correctedTiw = Converter::toCvSE3(eigR,eigt);
-
-            pKFi->SetPose(correctedTiw);
-
-            // Make sure connections are updated
-            pKFi->UpdateConnections();
-        }
-
-        // Start Loop Fusion
-        // Update matched map points and replace if duplicated
-        for(size_t i=0; i<mvpCurrentMatchedPoints.size(); i++)
-        {
-            if(mvpCurrentMatchedPoints[i])
-            {
-                MapPoint* pLoopMP = mvpCurrentMatchedPoints[i];
-                MapPoint* pCurMP = mpCurrentKF->GetMapPoint(i);
-                if(pCurMP)
-                    pCurMP->Replace(pLoopMP);
-                else
-                {
-                    mpCurrentKF->AddMapPoint(pLoopMP,i);
-                    pLoopMP->AddObservation(mpCurrentKF,i);
-                    pLoopMP->ComputeDistinctiveDescriptors();
-                }
-            }
-        }
-
-    }
-
-    ROS_DEBUG_STREAM("Search and fuse SE(3)");
-
-    // Project MapPoints observed in the neighborhood of the loop keyframe
-    // into the current keyframe and neighbors using corrected poses.
-    // Fuse duplications.
-    SearchAndFuse(CorrectedSim3);
 
 
-    // After the MapPoint fusion, new links in the covisibility graph will appear attaching both sides of the loop
-    map<KeyFrame*, set<KeyFrame*> > LoopConnections;
+    /****************************************************
+    // Skip closing and linking matching frames in the loop
+    *****************************************************/
 
-    for(vector<KeyFrame*>::iterator vit=mvpCurrentConnectedKFs.begin(), vend=mvpCurrentConnectedKFs.end(); vit!=vend; vit++)
-    {
-        KeyFrame* pKFi = *vit;
-        vector<KeyFrame*> vpPreviousNeighbors = pKFi->GetVectorCovisibleKeyFrames();
+    //     for(vector<KeyFrame*>::iterator vit=mvpCurrentConnectedKFs.begin(), vend=mvpCurrentConnectedKFs.end(); vit!=vend; vit++)
+    //     {
+    //         KeyFrame* pKFi = *vit;
 
-        // Update connections. Detect new links.
-        pKFi->UpdateConnections();
-        LoopConnections[pKFi]=pKFi->GetConnectedKeyFrames();
-        for(vector<KeyFrame*>::iterator vit_prev=vpPreviousNeighbors.begin(), vend_prev=vpPreviousNeighbors.end(); vit_prev!=vend_prev; vit_prev++)
-        {
-            LoopConnections[pKFi].erase(*vit_prev);
-        }
-        for(vector<KeyFrame*>::iterator vit2=mvpCurrentConnectedKFs.begin(), vend2=mvpCurrentConnectedKFs.end(); vit2!=vend2; vit2++)
-        {
-            LoopConnections[pKFi].erase(*vit2);
-        }
-    }
+    //         cv::Mat Tiw = pKFi->GetPose();
 
-    ROS_DEBUG_STREAM("Optimising essential graph.");
+    //         if(pKFi!=mpCurrentKF)
+    //         {
+    //             cv::Mat Tic = Tiw*Twc;
+    //             cv::Mat Ric = Tic.rowRange(0,3).colRange(0,3);
+    //             cv::Mat tic = Tic.rowRange(0,3).col(3);
+    //             g2o::Sim3 g2oSic(Converter::toMatrix3d(Ric),Converter::toVector3d(tic),1.0);
+    //             g2o::Sim3 g2oCorrectedSiw = g2oSic*mg2oScw;
+    //             //Pose corrected with the Sim3 of the loop closure
+    //             CorrectedSim3[pKFi]=g2oCorrectedSiw;
+    //         }
 
-    // Optimize graph
-    Optimizer::OptimizeEssentialGraph(mpMap, mpMatchedKF, mpCurrentKF, NonCorrectedSim3, CorrectedSim3, LoopConnections, mbFixScale);
+    //         cv::Mat Riw = Tiw.rowRange(0,3).colRange(0,3);
+    //         cv::Mat tiw = Tiw.rowRange(0,3).col(3);
+    //         g2o::Sim3 g2oSiw(Converter::toMatrix3d(Riw),Converter::toVector3d(tiw),1.0);
+    //         //Pose without correction
+    //         NonCorrectedSim3[pKFi]=g2oSiw;
+    //     }
 
-    mpMap->InformNewBigChange();
+    //     // Correct all MapPoints obsrved by current keyframe and neighbors, so that they align with the other side of the loop
+    //     for(KeyFrameAndPose::iterator mit=CorrectedSim3.begin(), mend=CorrectedSim3.end(); mit!=mend; mit++)
+    //     {
+    //         KeyFrame* pKFi = mit->first;
+    //         g2o::Sim3 g2oCorrectedSiw = mit->second;
+    //         g2o::Sim3 g2oCorrectedSwi = g2oCorrectedSiw.inverse();
 
-    // Add loop edge
-    mpMatchedKF->AddLoopEdge(mpCurrentKF);
-    mpCurrentKF->AddLoopEdge(mpMatchedKF);
+    //         g2o::Sim3 g2oSiw =NonCorrectedSim3[pKFi];
+
+    //         vector<MapPoint*> vpMPsi = pKFi->GetMapPointMatches();
+    //         for(size_t iMP=0, endMPi = vpMPsi.size(); iMP<endMPi; iMP++)
+    //         {
+    //             MapPoint* pMPi = vpMPsi[iMP];
+    //             if(!pMPi)
+    //                 continue;
+    //             if(pMPi->isBad())
+    //                 continue;
+    //             if(pMPi->mnCorrectedByKF==mpCurrentKF->mnId)
+    //                 continue;
+
+    //             // Project with non-corrected pose and project back with corrected pose
+    //             cv::Mat P3Dw = pMPi->GetWorldPos();
+    //             Eigen::Matrix<double,3,1> eigP3Dw = Converter::toVector3d(P3Dw);
+    //             Eigen::Matrix<double,3,1> eigCorrectedP3Dw = g2oCorrectedSwi.map(g2oSiw.map(eigP3Dw));
+
+    //             cv::Mat cvCorrectedP3Dw = Converter::toCvMat(eigCorrectedP3Dw);
+    //             pMPi->SetWorldPos(cvCorrectedP3Dw);
+    //             pMPi->mnCorrectedByKF = mpCurrentKF->mnId;
+    //             pMPi->mnCorrectedReference = pKFi->mnId;
+    //             pMPi->UpdateNormalAndDepth();
+    //         }
+
+    //         // Update keyframe pose with corrected Sim3. First transform Sim3 to SE3 (scale translation)
+    //         Eigen::Matrix3d eigR = g2oCorrectedSiw.rotation().toRotationMatrix();
+    //         Eigen::Vector3d eigt = g2oCorrectedSiw.translation();
+    //         double s = g2oCorrectedSiw.scale();
+
+    //         eigt *=(1./s); //[R t/s;0 1]
+
+    //         cv::Mat correctedTiw = Converter::toCvSE3(eigR,eigt);
+
+    //         pKFi->SetPose(correctedTiw);
+
+    //         // Make sure connections are updated
+    //         pKFi->UpdateConnections();
+    //     }
+
+    //     // Start Loop Fusion
+    //     // Update matched map points and replace if duplicated
+    //     for(size_t i=0; i<mvpCurrentMatchedPoints.size(); i++)
+    //     {
+    //         if(mvpCurrentMatchedPoints[i])
+    //         {
+    //             MapPoint* pLoopMP = mvpCurrentMatchedPoints[i];
+    //             MapPoint* pCurMP = mpCurrentKF->GetMapPoint(i);
+    //             if(pCurMP)
+    //                 pCurMP->Replace(pLoopMP);
+    //             else
+    //             {
+    //                 mpCurrentKF->AddMapPoint(pLoopMP,i);
+    //                 pLoopMP->AddObservation(mpCurrentKF,i);
+    //                 pLoopMP->ComputeDistinctiveDescriptors();
+    //             }
+    //         }
+    //     }
+
+    // }
+
+
+    // ROS_DEBUG_STREAM("Search and fuse SE(3)");
+
+    // // Project MapPoints observed in the neighborhood of the loop keyframe
+    // // into the current keyframe and neighbors using corrected poses.
+    // // Fuse duplications.
+    // SearchAndFuse(CorrectedSim3);
+
+
+    // // After the MapPoint fusion, new links in the covisibility graph will appear attaching both sides of the loop
+    // map<KeyFrame*, set<KeyFrame*> > LoopConnections;
+
+    // for(vector<KeyFrame*>::iterator vit=mvpCurrentConnectedKFs.begin(), vend=mvpCurrentConnectedKFs.end(); vit!=vend; vit++)
+    // {
+    //     KeyFrame* pKFi = *vit;
+    //     vector<KeyFrame*> vpPreviousNeighbors = pKFi->GetVectorCovisibleKeyFrames();
+
+    //     // Update connections. Detect new links.
+    //     pKFi->UpdateConnections();
+    //     LoopConnections[pKFi]=pKFi->GetConnectedKeyFrames();
+    //     for(vector<KeyFrame*>::iterator vit_prev=vpPreviousNeighbors.begin(), vend_prev=vpPreviousNeighbors.end(); vit_prev!=vend_prev; vit_prev++)
+    //     {
+    //         LoopConnections[pKFi].erase(*vit_prev);
+    //     }
+    //     for(vector<KeyFrame*>::iterator vit2=mvpCurrentConnectedKFs.begin(), vend2=mvpCurrentConnectedKFs.end(); vit2!=vend2; vit2++)
+    //     {
+    //         LoopConnections[pKFi].erase(*vit2);
+    //     }
+    // }
+
+    // ROS_DEBUG_STREAM("Optimising essential graph.");
+
+    // // Optimize graph
+    // Optimizer::OptimizeEssentialGraph(mpMap, mpMatchedKF, mpCurrentKF, NonCorrectedSim3, CorrectedSim3, LoopConnections, mbFixScale);
+
+    // mpMap->InformNewBigChange();
+
+    // // Add loop edge
+    // mpMatchedKF->AddLoopEdge(mpCurrentKF);
+    // mpCurrentKF->AddLoopEdge(mpMatchedKF);
 
     ROS_DEBUG_STREAM("Launching GlobalBundleAdjustment thread");
     // Launch a new thread to perform Global Bundle Adjustment
