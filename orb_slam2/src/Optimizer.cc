@@ -25,11 +25,12 @@
 
 #include <g2o/core/block_solver.h>
 #include <g2o/core/optimization_algorithm_levenberg.h>
-#include <g2o/solvers/eigen/linear_solver_eigen.h>
+#include <g2o/types/sim3/types_seven_dof_expmap.h>
 #include <g2o/types/sba/types_six_dof_expmap.h>
 #include <g2o/core/robust_kernel_impl.h>
 #include <g2o/solvers/dense/linear_solver_dense.h>
-#include <g2o/types/sim3/types_seven_dof_expmap.h>
+#include <g2o/solvers/eigen/linear_solver_eigen.h>
+
 
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
 
@@ -125,7 +126,7 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
         vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));
         const int id = pMP->mnId+maxKFid+1;
         vPoint->setId(id);
-        vPoint->setMarginalized(true);
+        vPoint->setMarginalized(true); // Default true
 
         optimizer.addVertex(vPoint);
 
@@ -237,6 +238,29 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
     optimizer.optimize(nIterations);
     ROS_DEBUG_STREAM("Global bundle adjustment done.");
 
+    g2o::SparseBlockMatrix<MatrixXd> testOutputMatrix;
+
+
+    // TEST: see block values
+    while(1){
+        std::vector<std::pair<int, int>> blockIndices;
+        int iin;
+
+        cout << "\nPlease enter block index: ";
+        cin >> iin;
+
+        blockIndices.push_back(make_pair(iin,iin));
+        
+        if(optimizer.computeMarginals(testOutputMatrix,blockIndices)){
+            ROS_DEBUG_STREAM("Test computeMarginals success");
+            MatrixXd& cov = *(testOutputMatrix.block(iin,iin));
+            std::cout << cov << endl;
+        }
+        else{
+            ROS_DEBUG_STREAM("Test computeMarginals failed");
+        }
+    }
+
 
 
 ///////////////////////////////////////////////
@@ -246,7 +270,6 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
 
     // Store the indices of the world points and covariance matrix from computeMarginals
     std::vector<std::pair<int, int>> globalBlockIndices;
-    g2o::SparseBlockMatrix<MatrixXd> localTestOutputMatrix;
     
     // Get the indices of all the mappoints 
     for (size_t i=0; i<100 /*vpMP.size()-1*/; i++) { // Full size fails due to speed issues
@@ -255,12 +278,12 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
             globalBlockIndices.push_back(make_pair(v->hessianIndex(), v->hessianIndex()));
             // ROS_DEBUG_STREAM("Finished creating indices " << v->hessianIndex());
         }
-
     }
 
     ROS_DEBUG_STREAM("Populated globalBlockIndices, size = " << globalBlockIndices.size());
 
     // Will only print value if computeMarginals successfully runs (i.e. input vertices are valid)
+    g2o::SparseBlockMatrix<MatrixXd> localTestOutputMatrix;
     if(optimizer.computeMarginals(localTestOutputMatrix,globalBlockIndices)){
         ROS_INFO_STREAM("Covariance of local bundle adjustment:\n");
         MatrixXd& cov = *(localTestOutputMatrix.block(1,1));

@@ -25,8 +25,12 @@
        <param name="debugFlag" type="bool" value="$(arg debugFlag)"/>
    </node>
 
-   <!-- Run with gdb if debug flag -->
-   <node name="orb_slam2_rgbd" pkg="orb_slam2_ros" type="orb_slam2_ros_rgbd" output="screen" launch-prefix="valgrind" if="$(eval gdbFlag)">
+   <!-- Run with debugger if debug flag -->
+<!-- gdb -->
+    <node name="orb_slam2_rgbd" pkg="orb_slam2_ros" type="orb_slam2_ros_rgbd" output="screen" launch-prefix="gdb -ex run --args" if="$(eval gdbFlag)">
+
+<!-- Valgrind -->
+  <!-- <node name="orb_slam2_rgbd" pkg="orb_slam2_ros" type="orb_slam2_ros_rgbd" output="screen" launch-prefix="valgrind" if="$(eval gdbFlag)"> -->
 
      <remap from="/camera/rgb/image_raw" to="/camera/color/image_rect_color" />
      <remap from="/camera/depth_registered/image_raw" to="/camera/depth/image_rect_raw" />
